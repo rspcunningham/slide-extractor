@@ -68,4 +68,4 @@ Each step caches its output. To re-run a step, delete its output directory first
 
 ## Cost
 
-The only paid component is the Claude API call for slide classification. A ~1 hour lecture typically produces ~200-300 candidate frames, classified in batches using Claude Haiku. Expect roughly **~$0.50 per hour of video**.
+This tool consumes tokens from Anthropic. The API cost is roughly $0.50 per hour of video.
