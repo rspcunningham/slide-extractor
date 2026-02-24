@@ -1,4 +1,5 @@
 import base64
+import json
 import shutil
 from pathlib import Path
 
@@ -7,7 +8,9 @@ from slide_extractor.env import load_dotenv
 load_dotenv()
 
 import anthropic
+from rich.progress import track
 
+from slide_extractor.console import console
 
 SYSTEM_PROMPT = (
     "You classify frames extracted from lecture videos. Your job is to identify "
@@ -71,11 +74,26 @@ def _classify_batch(client: anthropic.Anthropic, paths: list[Path]) -> list[bool
     return results[: len(paths)]
 
 
+def _load_manifest(manifest_path: Path) -> dict[str, str]:
+    """Load the classification manifest from disk."""
+    if manifest_path.exists():
+        return json.loads(manifest_path.read_text())
+    return {}
+
+
+def _save_manifest(manifest_path: Path, manifest: dict[str, str]) -> None:
+    """Write the classification manifest to disk."""
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+
 def classify_slides(
     candidates_dir: Path,
     output_dir: Path | None = None,
 ) -> list[Path]:
     """Classify candidate frames as slide / not-slide using Claude vision.
+
+    Uses a manifest file (manifest.json) for resume support — if the process
+    is interrupted, re-running will skip already-classified batches.
 
     Copies slides to output_dir. Returns list of slide paths.
     """
@@ -83,30 +101,47 @@ def classify_slides(
         output_dir = candidates_dir.parent / "slides"
 
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    existing = sorted(output_dir.glob("frame_*.jpg"))
-    if existing:
-        print(f"Slides already classified: {len(existing)} in {output_dir}")
-        return existing
+    manifest_path = output_dir / "manifest.json"
 
     candidates = sorted(candidates_dir.glob("frame_*.jpg"))
     if not candidates:
-        print("No candidate frames found.")
+        console.print("No candidate frames found.")
         return []
 
+    # Load existing manifest for resume support
+    manifest = _load_manifest(manifest_path)
+
+    # Check if all candidates are already classified
+    remaining = [c for c in candidates if c.name not in manifest]
+
+    if not remaining:
+        slides = [output_dir / c.name for c in candidates if manifest.get(c.name) == "SLIDE"]
+        slides = [s for s in slides if s.exists()]
+        console.print(f"All candidates already classified: {len(slides)} slides in {output_dir}")
+        return sorted(slides)
+
+    if manifest:
+        console.print(f"Resuming classification: {len(manifest)} already done, {len(remaining)} remaining")
+
     client = anthropic.Anthropic()
-    slides: list[Path] = []
 
-    for i in range(0, len(candidates), BATCH_SIZE):
-        batch = candidates[i : i + BATCH_SIZE]
-        print(f"Classifying batch {i // BATCH_SIZE + 1} ({len(batch)} images) ...")
+    # Process remaining candidates in batches
+    batches = [remaining[i : i + BATCH_SIZE] for i in range(0, len(remaining), BATCH_SIZE)]
 
+    for batch in track(batches, description="Classifying", console=console):
         results = _classify_batch(client, batch)
         for path, is_slide in zip(batch, results):
+            label = "SLIDE" if is_slide else "NOT_SLIDE"
+            manifest[path.name] = label
             if is_slide:
                 dst = output_dir / path.name
                 shutil.copy2(path, dst)
-                slides.append(dst)
 
-    print(f"Classified {len(slides)} slides out of {len(candidates)} candidates -> {output_dir}")
+        # Flush manifest after each batch for resume safety
+        _save_manifest(manifest_path, manifest)
+
+    slides = sorted(
+        [output_dir / c.name for c in candidates if manifest.get(c.name) == "SLIDE" and (output_dir / c.name).exists()]
+    )
+    console.print(f"Classified [bold]{len(slides)}[/bold] slides out of {len(candidates)} candidates -> {output_dir}")
     return slides

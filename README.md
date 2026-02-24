@@ -2,7 +2,7 @@
 
 Extract presentation slides from lecture videos into annotatable PDFs.
 
-Takes a YouTube lecture video and produces a PDF with one page per unique slide — essentially reverse-engineering the slide deck from the recording.
+Takes a YouTube lecture video (or an entire playlist) and produces a PDF with one page per unique slide — essentially reverse-engineering the slide deck from the recording.
 
 ## How it works
 
@@ -12,6 +12,7 @@ Takes a YouTube lecture video and produces a PDF with one page per unique slide 
 4. **Classify** each candidate frame as slide vs. non-slide using Claude's vision API (filters out professor/room shots)
 5. **Deduplicate** similar slides, keeping the sharpest version of each
 6. **Compile** the final set into a single PDF
+7. **Summarize** the lecture using Claude and representative slides
 
 ## Requirements
 
@@ -35,13 +36,21 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ## Usage
 
-Run the full pipeline:
+### Single video
 
 ```bash
 uv run slide-extractor run "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-Output lands in `output/<video-id>/slides.pdf`.
+Output lands in `output/<video-id>/` with `slides.pdf` and `summary.md`. The PDF auto-opens on macOS when done.
+
+### Playlist
+
+```bash
+uv run slide-extractor run "https://www.youtube.com/watch?v=...&list=PLAYLIST_ID"
+```
+
+Processes every video in the playlist and generates a course `index.md` linking to each lecture's PDF and summary.
 
 ### Options
 
@@ -49,6 +58,7 @@ Output lands in `output/<video-id>/slides.pdf`.
 --fps 1.0              Frame extraction rate (default: 1)
 --detect-threshold 10  Sensitivity for scene change detection (lower = more candidates)
 --dedup-threshold 5    Similarity threshold for deduplication (lower = stricter)
+--no-open              Don't auto-open the output when done
 ```
 
 ### Individual steps
@@ -62,10 +72,11 @@ uv run slide-extractor detect <frames-dir>
 uv run slide-extractor classify <candidates-dir>
 uv run slide-extractor dedup <slides-dir>
 uv run slide-extractor compile <slides-dir>
+uv run slide-extractor summarize <youtube-url> <slides-dir>
 ```
 
-Each step caches its output. To re-run a step, delete its output directory first.
+Each step caches its output. To re-run a step, delete its output directory first. The classify step saves a `manifest.json` so it can resume from where it left off if interrupted.
 
 ## Cost
 
-This tool consumes tokens from Anthropic. The API cost is roughly $0.50 per hour of video.
+The classify and summarize steps consume Anthropic API tokens. Roughly ~$0.50 per hour of video.

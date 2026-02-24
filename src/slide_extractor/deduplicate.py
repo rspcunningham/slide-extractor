@@ -1,8 +1,12 @@
+import shutil
 from pathlib import Path
 
 import imagehash
 import numpy as np
 from PIL import Image, ImageFilter
+from rich.progress import track
+
+from slide_extractor.console import console
 
 
 def _phash(path: Path) -> imagehash.ImageHash:
@@ -36,17 +40,15 @@ def deduplicate(
 
     existing = sorted(output_dir.glob("frame_*.jpg"))
     if existing:
-        print(f"Already deduplicated: {len(existing)} in {output_dir}")
+        console.print(f"Already deduplicated: {len(existing)} in {output_dir}")
         return existing
 
     slides = sorted(slides_dir.glob("frame_*.jpg"))
     if not slides:
-        print("No slides to deduplicate.")
+        console.print("No slides to deduplicate.")
         return []
 
-    print(f"Deduplicating {len(slides)} slides (threshold={threshold}) ...")
-
-    hashes = [_phash(s) for s in slides]
+    hashes = [_phash(s) for s in track(slides, description="Hashing slides", console=console)]
 
     # Group slides by similarity using union-find
     parent = list(range(len(slides)))
@@ -83,13 +85,11 @@ def deduplicate(
     kept.sort(key=lambda p: p.name)
 
     # Copy to output
-    import shutil
-
     result: list[Path] = []
     for src in kept:
         dst = output_dir / src.name
         shutil.copy2(src, dst)
         result.append(dst)
 
-    print(f"Deduplicated {len(slides)} -> {len(result)} unique slides -> {output_dir}")
+    console.print(f"Deduplicated {len(slides)} -> [bold]{len(result)}[/bold] unique slides -> {output_dir}")
     return result

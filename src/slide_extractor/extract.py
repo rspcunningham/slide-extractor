@@ -1,6 +1,8 @@
 import subprocess
 from pathlib import Path
 
+from slide_extractor.console import console
+
 
 def extract_frames(video_path: Path, output_dir: Path | None = None, fps: float = 1.0) -> list[Path]:
     """Extract frames from a video at the given FPS using ffmpeg.
@@ -17,7 +19,7 @@ def extract_frames(video_path: Path, output_dir: Path | None = None, fps: float 
     # Check if frames already exist
     existing = sorted(output_dir.glob("frame_*.jpg"))
     if existing:
-        print(f"Frames already extracted: {len(existing)} frames in {output_dir}")
+        console.print(f"Frames already extracted: {len(existing)} frames in {output_dir}")
         return existing
 
     cmd = [
@@ -30,9 +32,9 @@ def extract_frames(video_path: Path, output_dir: Path | None = None, fps: float 
         "-loglevel", "warning",
     ]
 
-    print(f"Extracting frames at {fps} fps ...")
-    subprocess.run(cmd, check=True)
+    with console.status(f"Extracting frames at {fps} fps ..."):
+        subprocess.run(cmd, check=True)
 
     frames = sorted(output_dir.glob("frame_*.jpg"))
-    print(f"Extracted {len(frames)} frames to {output_dir}")
+    console.print(f"Extracted [bold]{len(frames)}[/bold] frames to {output_dir}")
     return frames

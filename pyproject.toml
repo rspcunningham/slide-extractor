@@ -8,6 +8,7 @@ dependencies = [
     "imagehash>=4.3.2",
     "img2pdf>=0.6.3",
     "pillow>=12.1.1",
+    "rich>=14.3.3",
     "yt-dlp>=2026.2.21",
 ]
 
@@ -20,3 +21,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/slide_extractor"]
+
+[dependency-groups]
+dev = []

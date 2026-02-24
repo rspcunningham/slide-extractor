@@ -1,6 +1,9 @@
+import json
 import re
 import subprocess
 from pathlib import Path
+
+from slide_extractor.console import console
 
 
 def extract_video_id(url: str) -> str:
@@ -14,6 +17,58 @@ def extract_video_id(url: str) -> str:
         if match:
             return match.group(1)
     raise ValueError(f"Could not extract video ID from: {url}")
+
+
+def extract_playlist_id(url: str) -> str | None:
+    """Extract playlist ID from a YouTube URL, or None if not a playlist."""
+    match = re.search(r"[?&]list=([a-zA-Z0-9_-]+)", url)
+    return match.group(1) if match else None
+
+
+def is_playlist(url: str) -> bool:
+    """Check if a YouTube URL points to a playlist."""
+    return extract_playlist_id(url) is not None
+
+
+def enumerate_playlist(url: str) -> list[dict]:
+    """List all videos in a playlist without downloading them.
+
+    Returns a list of dicts with keys: id, url, title.
+    """
+    cmd = [
+        "yt-dlp",
+        "--flat-playlist",
+        "--dump-json",
+        "--no-warnings",
+        url,
+    ]
+
+    console.print(f"Fetching playlist info ...")
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    videos = []
+    for line in result.stdout.strip().splitlines():
+        data = json.loads(line)
+        video_id = data.get("id", "")
+        videos.append({
+            "id": video_id,
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+            "title": data.get("title", video_id),
+        })
+    console.print(f"Found [bold]{len(videos)}[/bold] videos in playlist")
+    return videos
+
+
+def get_video_metadata(url: str) -> dict:
+    """Fetch video metadata (title, description, duration, etc.) without downloading."""
+    cmd = [
+        "yt-dlp",
+        "--dump-json",
+        "--no-playlist",
+        "--no-warnings",
+        url,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    return json.loads(result.stdout)
 
 
 def download(url: str, output_dir: Path | None = None) -> Path:
@@ -30,7 +85,7 @@ def download(url: str, output_dir: Path | None = None) -> Path:
     output_path = output_dir / "video.mp4"
 
     if output_path.exists():
-        print(f"Video already downloaded: {output_path}")
+        console.print(f"Video already downloaded: {output_path}")
         return output_path
 
     cmd = [
@@ -43,7 +98,7 @@ def download(url: str, output_dir: Path | None = None) -> Path:
         url,
     ]
 
-    print(f"Downloading {url} ...")
-    subprocess.run(cmd, check=True)
-    print(f"Saved to {output_path}")
+    with console.status(f"Downloading [bold]{url}[/bold] ..."):
+        subprocess.run(cmd, check=True)
+    console.print(f"Saved to {output_path}")
     return output_path

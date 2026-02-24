@@ -3,6 +3,9 @@ from pathlib import Path
 
 import imagehash
 from PIL import Image
+from rich.progress import track
+
+from slide_extractor.console import console
 
 
 def _phash(path: Path) -> imagehash.ImageHash:
@@ -29,16 +32,15 @@ def detect_transitions(
 
     existing = sorted(output_dir.glob("frame_*.jpg"))
     if existing:
-        print(f"Candidates already detected: {len(existing)} in {output_dir}")
+        console.print(f"Candidates already detected: {len(existing)} in {output_dir}")
         return existing
 
     frames = sorted(frames_dir.glob("frame_*.jpg"))
     if not frames:
-        print("No frames found.")
+        console.print("No frames found.")
         return []
 
-    print(f"Computing perceptual hashes for {len(frames)} frames ...")
-    hashes = [_phash(f) for f in frames]
+    hashes = [_phash(f) for f in track(frames, description="Hashing frames", console=console)]
 
     # Walk through frames. When we detect a big jump between frame[i] and
     # frame[i+1], we emit frame[i] as the "last frame of the previous scene".
@@ -60,5 +62,5 @@ def detect_transitions(
         shutil.copy2(src, dst)
         result.append(dst)
 
-    print(f"Detected {len(result)} transitions -> {output_dir}")
+    console.print(f"Detected [bold]{len(result)}[/bold] transitions -> {output_dir}")
     return result

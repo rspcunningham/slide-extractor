@@ -2,6 +2,8 @@ from pathlib import Path
 
 import img2pdf
 
+from slide_extractor.console import console
+
 
 def compile_pdf(
     slides_dir: Path,
@@ -18,8 +20,8 @@ def compile_pdf(
     if not images:
         raise FileNotFoundError(f"No slide images found in {slides_dir}")
 
-    print(f"Compiling {len(images)} slides into {output_path} ...")
+    console.print(f"Compiling {len(images)} slides into {output_path} ...")
     pdf_bytes = img2pdf.convert([str(p) for p in images])
     output_path.write_bytes(pdf_bytes)
-    print(f"PDF saved: {output_path}")
+    console.print(f"PDF saved: [bold]{output_path}[/bold]")
     return output_path
